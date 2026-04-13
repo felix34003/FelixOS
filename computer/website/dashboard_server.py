@@ -27,10 +27,13 @@ codec = av.CodecContext.create('h264', 'r')
 
 def _draw_osd(img):
     """Burn node-stats overlay onto img in-place (same style as OSD window)."""
+    row_h   = 35
+    padding = 10
+    box_h   = 30 + len(node_stats) * row_h + padding
     overlay = img.copy()
-    cv2.rectangle(overlay, (5, 5), (315, 80), (0, 0, 0), -1)
+    cv2.rectangle(overlay, (5, 5), (315, box_h), (0, 0, 0), -1)
     cv2.addWeighted(overlay, 0.5, img, 0.5, 0, img)
-    cv2.putText(img, "FELIX MISSION CONTROL [H.264]", (10, 20),
+    cv2.putText(img, "GROUP4OS MISSION CONTROL [H.264]", (10, 20),
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
     y = 40
     for node, stats in node_stats.items():
