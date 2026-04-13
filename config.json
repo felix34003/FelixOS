@@ -13,10 +13,20 @@
         }
     },
     "topics": {
-        "video": "felix/video",
-        "counter": "felix/counter",
-        "heartbeat": "felix/nodes",
-        "shutdown": "felix/control/shutdown"
+        "video":    "felix/video",
+        "counter":  "felix/counter",
+        "heartbeat":"felix/nodes",
+        "shutdown": "felix/control/shutdown",
+        "odom":     "felix/odom",
+        "cmd_vel":  "felix/cmd_vel"
+    },
+    "arduino": {
+        "serial_port":      "/dev/arduino",
+        "serial_baud":      115200,
+        "wheel_radius":     0.04,
+        "wheel_separation": 0.21,
+        "encoder_cpr":      2.0,
+        "gear_ratio":       30.0
     },
     "config": {
         "video_fps": 30,

@@ -13,6 +13,7 @@ PI_SYNC_FILES = [
     ("pi/video_publisher.py",    "pi/video_publisher.py"),
     ("pi/counter_subscriber.py", "pi/counter_subscriber.py"),
     ("pi/status_server.py",      "pi/status_server.py"),
+    ("pi/arduino_bridge.py",     "pi/arduino_bridge.py"),
     ("utils.py",                 "utils.py"),
     ("config.json",              "config.json"),
 ]
@@ -88,6 +89,7 @@ def main():
         "pi/video_publisher.py",
         "pi/counter_subscriber.py",
         "pi/status_server.py",
+        "pi/arduino_bridge.py",
     ]
     print("\nStarting Pi nodes...")
     for script in pi_nodes:
