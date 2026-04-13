@@ -22,20 +22,15 @@ node_stats = {}
 config = load_config()
 
 def video_handler(sample):
+    """Directly relay JPEG bytes to the browser without re-encoding."""
     try:
-        # Decode Zenoh ZBytes to numpy array
-        nparr = np.frombuffer(bytes(sample.payload), np.uint8)
-        frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+        data = bytes(sample.payload)
         
-        if frame is not None:
-            # Encode back to JPEG for the browser
-            _, buffer = cv2.imencode('.jpg', frame)
-            
-            # Non-blocking put
-            if frame_queue.full():
-                try: frame_queue.get_nowait()
-                except: pass
-            frame_queue.put(buffer.tobytes())
+        # Non-blocking put
+        if frame_queue.full():
+            try: frame_queue.get_nowait()
+            except: pass
+        frame_queue.put(data)
     except Exception as e:
         pass
 

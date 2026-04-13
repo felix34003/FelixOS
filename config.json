@@ -19,6 +19,8 @@
     },
     "config": {
         "video_fps": 30,
+        "video_width": 640,
+        "video_height": 480,
         "counter_rate_hz": 1
     },
     "zenoh": {

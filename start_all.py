@@ -74,9 +74,10 @@ def main():
     pi_proj_dir = f"/home/{pi_cfg['user']}/FelixOS"
     conn.run(f"mkdir -p {pi_proj_dir}/pi")
     
+    print("Cleaning up old processes on Pi...")
+    conn.run("pkill -u ece_441 python3 || true")
+    
     print("Uploading latest code to Pi...")
-    # Using scp via fabric is tricky for dirs, we'll just shell out for now or assume setup
-    # Actually, let's use the MCP tool to upload for the final deployment
     
     commands = [
         f"nohup {pi_cfg['venv']} {pi_proj_dir}/pi/video_publisher.py >> {pi_proj_dir}/pi_nodes.log 2>&1 &",
@@ -96,13 +97,14 @@ def main():
     pc_nodes = []
     
     # 1. Counter Publisher
-    print("Starting counter publisher (Local)...")
+    print("Launching Local PC Nodes...", flush=True)
+    # 1. Counter Publisher
     pc_nodes.append(subprocess.Popen([sys.executable, f"{os.path.dirname(__file__)}/computer/topics/counter_publisher.py"]))
     
-    # 2. NEW: Mission Control Dashboard (Browser-based)
-    print("Starting Mission Control Dashboard (Local)...")
-    pc_nodes.append(subprocess.Popen([sys.executable, f"{os.path.dirname(__file__)}/computer/website/dashboard_server.py"]))
-
+    # 2. Native OSD Video Receiver (Fastest Performance)
+    pc_nodes.append(subprocess.Popen([sys.executable, f"{os.path.dirname(__file__)}/computer/video_receiver_osd.py"]))
+    
+    print("System active. Press Ctrl+C to stop all.", flush=True)
     try:
         for node in pc_nodes:
             node.wait()

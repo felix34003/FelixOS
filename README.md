@@ -55,8 +55,24 @@ python start_all.py
 
 ---
 
+## 📈 Performance & Known Issues
+
+### 🎥 Video Quality vs. CPU Usage
+Our current video pipeline is optimized for **Global Zero-Latency** but comes with a hardware trade-off:
+- **Resolution**: 320x240 (Standard Low-Def)
+- **Framerate**: 30 FPS
+- **Pi CPU Load**: ~65% - 70%
+- **PC CPU Load**: ~5%
+
+> [!WARNING]
+> **Performance Bottleneck:** The Raspberry Pi's CPU is currently performing **Software JPEG Encoding** (`cv2.imencode`). Despite the low resolution, this is mathematically expensive for the Pi. 
+> 
+> **Future Optimization:** To increase video quality while decreasing CPU load, we must pivot to **Hardware Acceleration** via GStreamer or `libcamera` with H.264/V4L2 encoding. This would theoretically drop Pi CPU usage to <15% even at 720p.
+
+---
+
 ## ⚡ Hardware Note: Power Management
-FelixOS includes deep telemetry for hardware health. If the dashboard reports **Undervoltage**, ensure the Raspberry Pi is powered by a high-quality **5V/3A adapter**. Undervoltage will cause USB resets, leading to camera failure.
+FelixOS includes deep telemetry for hardware health. If the dashboard reports **Undervoltage** (throttled code `0x50005`), ensure the Raspberry Pi is powered by a high-quality **5V/3A adapter**. Undervoltage will cause USB resets, leading to camera failure and stuttering.
 
 ---
 
