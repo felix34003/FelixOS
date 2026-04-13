@@ -46,27 +46,42 @@ def main():
 
     print("Video Publisher started. Sending stream to 'felix/video'...", flush=True)
     
+    last_hb_time = 0
+    status_file = os.path.join(os.path.dirname(__file__), "..", "felix_counter.txt")
+    
     try:
-
         while True:
             ret, frame = cap.read()
             if not ret:
                 break
             
-            # Encode frame as JPEG
-            # Resize if needed for latency
-            # frame = cv2.resize(frame, (640, 480))
-            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
+            # --- LAG REDUCTION ---
+            # Resize to 640x480 for faster encoding/transmission
+            frame = cv2.resize(frame, (640, 480))
+            
+            # Encode at medium quality (40% is the sweet spot for balance)
+            _, buffer = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 40])
             
             # Publish frame
             pub_video.put(buffer.tobytes())
             
-            # Publish heartbeat every 2 seconds
-            if int(time.time()) % 2 == 0:
-                hb = get_heartbeat("Pi")
+            # --- HEARTBEAT & TELEMETRY ---
+            now = time.time()
+            if now - last_hb_time > 2.0:
+                # Read last counter received by this Pi
+                last_counter = 0
+                try:
+                    if os.path.exists(status_file):
+                        with open(status_file, "r") as f:
+                            last_counter = int(f.read().strip())
+                except:
+                    pass
+
+                hb = get_heartbeat("Pi", last_counter=last_counter)
                 pub_hb.put(json.dumps(hb))
+                last_hb_time = now
             
-            # Control FPS
+            # Control FPS (using small sleep to prevent CPU hogging)
             time.sleep(1/config['config']['video_fps'])
             
     except KeyboardInterrupt:

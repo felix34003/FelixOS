@@ -27,12 +27,21 @@ def get_zenoh_config(mode="connect"):
         
     return z_config
 
-def get_heartbeat(node_name):
-
+def get_heartbeat(node_name, last_counter=0):
+    # Try to read Pi temperature
+    temp = 0.0
+    try:
+        with open("/sys/class/thermal/thermal_zone0/temp", "r") as f:
+            temp = float(f.read()) / 1000.0
+    except:
+        pass
+        
     return {
         "node": node_name,
         "status": "Running",
         "cpu_percent": psutil.cpu_percent(),
         "memory_percent": psutil.virtual_memory().percent,
+        "temp": round(temp, 1),
+        "last_counter": last_counter,
         "timestamp": time.time()
     }

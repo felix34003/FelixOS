@@ -17,7 +17,7 @@ from utils import load_config, get_zenoh_config
 app = Flask(__name__)
 
 # Global state
-frame_queue = Queue(maxsize=10)
+frame_queue = Queue(maxsize=1)
 node_stats = {}
 config = load_config()
 
