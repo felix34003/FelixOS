@@ -93,7 +93,9 @@ def main():
     ]
     print("\nStarting Pi nodes...")
     for script in pi_nodes:
-        cmd = (f"nohup {pi_cfg['venv']} {pi_proj_dir}/{script} "
+        # Wrap in a restart loop — if a node crashes it comes back within 1 s
+        cmd = (f"nohup bash -c 'while true; do "
+               f"{pi_cfg['venv']} {pi_proj_dir}/{script}; sleep 1; done' "
                f">> {pi_proj_dir}/pi_nodes.log 2>&1 &")
         conn.run(cmd, disown=True)
         print(f"  Launched {script}")

@@ -48,20 +48,6 @@ def main():
     ticks      = {'fr': 0, 'rl': 0}   # cumulative encoder counts
     ser_lock   = threading.Lock()      # guard serial writes
     last_speed = [None]                # track last sent speed to avoid flooding
-    ser_ref    = [ser]                 # mutable so both threads pick up reconnects
-
-    def _reopen_serial():
-        """Reopen the serial port after a failure. Caller must hold ser_lock."""
-        try:
-            ser_ref[0].close()
-        except Exception:
-            pass
-        time.sleep(1.0)
-        ser_ref[0] = serial.Serial(port, baud, timeout=1.0)
-        time.sleep(2.0)   # Arduino resets on DTR toggle
-        ser_ref[0].reset_input_buffer()
-        last_speed[0] = None
-        print("Serial port reopened.", flush=True)
 
     # ---- cmd_vel subscriber: PC → Arduino ----
     # WORKAROUND: Arduino firmware has Q (CCW) and E (CW) rotation directions
@@ -77,27 +63,20 @@ def main():
         Speed-only update: {"cmd": "speed", "speed": 150}
         """
         try:
-            msg   = json.loads(bytes(sample.payload).decode('utf-8'))
-            cmd   = _ROTATION_SWAP.get(msg.get('cmd', 'x'), msg.get('cmd', 'x'))
+            msg  = json.loads(bytes(sample.payload).decode('utf-8'))
+            cmd  = _ROTATION_SWAP.get(msg.get('cmd', 'x'), msg.get('cmd', 'x'))
             speed = int(msg.get('speed', 150))
 
             with ser_lock:
                 if cmd == 'speed':
-                    ser_ref[0].write(f"speed:{speed}\n".encode())
+                    ser.write(f"speed:{speed}\n".encode())
                     last_speed[0] = speed
                 else:
                     # Send speed update only when it changes
                     if speed != last_speed[0]:
-                        ser_ref[0].write(f"speed:{speed}\n".encode())
+                        ser.write(f"speed:{speed}\n".encode())
                         last_speed[0] = speed
-                    ser_ref[0].write(f"{cmd}\n".encode())
-        except serial.SerialException as e:
-            print(f"cmd_handler serial error: {e} — reconnecting...", flush=True)
-            with ser_lock:
-                try:
-                    _reopen_serial()
-                except Exception as e2:
-                    print(f"Serial reconnect failed: {e2}", flush=True)
+                    ser.write(f"{cmd}\n".encode())
         except Exception as e:
             print(f"cmd_handler error: {e}", flush=True)
 
@@ -115,7 +94,7 @@ def main():
         while not stop_event.is_set():
             try:
                 # serial.Serial timeout=1.0 means readline returns after 1s with no data
-                line = ser_ref[0].readline().decode('utf-8', errors='ignore').strip()
+                line = ser.readline().decode('utf-8', errors='ignore').strip()
                 if not line:
                     continue
                 if line.startswith('ACK:'):
@@ -180,12 +159,12 @@ def main():
         # Stop motors before closing serial
         with ser_lock:
             try:
-                ser_ref[0].write(b"x\n")
+                ser.write(b"x\n")
             except Exception:
                 pass
         del subs
         session.close()
-        ser_ref[0].close()
+        ser.close()
         print("Arduino Bridge stopped.", flush=True)
 
 
