@@ -75,10 +75,11 @@ def main():
         connect_kwargs={"password": pi_cfg['ssh_pass']}
     )
 
-    # 3. Kill any old group4os processes on the Pi
+    # 3. Kill any old group4os processes on the Pi (including restart-loop wrappers)
     print("Killing old Pi processes...")
     conn.run("pkill -u ece_441 python3 || true", timeout=10, warn=True)
-    time.sleep(0.5)
+    conn.run("pkill -u ece_441 -f 'while true' || true", timeout=10, warn=True)
+    time.sleep(1.0)
 
     # 4. Sync code — Pi will always run the same version as the PC
     sync_code(conn, pi_cfg)
