@@ -136,7 +136,7 @@ def odom_handler(sample):
 def zenoh_worker():
     global pub_cmd_vel
     print("Connecting to Zenoh...")
-    z_config = get_zenoh_config("listen")
+    z_config = get_zenoh_config("connect")
     session  = zenoh.open(z_config)
 
     pub_cmd_vel = session.declare_publisher(config['topics']['cmd_vel'])
