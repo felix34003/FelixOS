@@ -1,0 +1,30 @@
+{
+    "nodes": {
+        "pc": {
+            "name": "PC",
+            "ip": "100.100.229.40"
+        },
+        "pi": {
+            "name": "Pi",
+            "ip": "100.89.188.77",
+            "user": "ece_441",
+            "ssh_pass": "group4pi",
+            "venv": "/home/ece_441/venv/bin/python3"
+        }
+    },
+    "topics": {
+        "video": "felix/video",
+        "counter": "felix/counter",
+        "heartbeat": "felix/nodes"
+    },
+    "config": {
+        "video_fps": 30,
+        "counter_rate_hz": 1
+    },
+    "zenoh": {
+        "connect": ["tcp/100.100.229.40:7447"],
+        "listen": ["tcp/0.0.0.0:7447"]
+    }
+}
+
+
