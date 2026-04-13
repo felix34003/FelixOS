@@ -137,23 +137,43 @@ def odom_handler(sample):
 
 def zenoh_worker():
     global pub_cmd_vel
-    print("Connecting to Zenoh...")
-    z_config = get_zenoh_config("connect")
-    session  = zenoh.open(z_config)
+    while not stop_event.is_set():
+        session = None
+        subs    = []
+        try:
+            print("Connecting to Zenoh...", flush=True)
+            z_config = get_zenoh_config("connect")
+            session  = zenoh.open(z_config)
 
-    pub_cmd_vel = session.declare_publisher(config['topics']['cmd_vel'])
+            pub_cmd_vel = session.declare_publisher(config['topics']['cmd_vel'])
 
-    subs = [
-        session.declare_subscriber(config['topics']['video'],            video_handler),
-        session.declare_subscriber(f"{config['topics']['heartbeat']}/*", heartbeat_handler),
-        session.declare_subscriber(config['topics']['odom'],             odom_handler),
-        session.declare_subscriber(config['topics']['shutdown'], lambda _s: stop_event.set()),
-    ]
+            subs = [
+                session.declare_subscriber(config['topics']['video'],            video_handler),
+                session.declare_subscriber(f"{config['topics']['heartbeat']}/*", heartbeat_handler),
+                session.declare_subscriber(config['topics']['odom'],             odom_handler),
+                # intentionally NOT subscribing to shutdown — dashboard keeps running
+                # regardless of orchestrator lifecycle
+            ]
 
-    print("Zenoh Bridge active.")
-    stop_event.wait()
-    del subs
-    session.close()
+            print("Zenoh Bridge active.", flush=True)
+            stop_event.wait()
+
+        except Exception as e:
+            print(f"[zenoh_worker] ERROR: {e} — reconnecting in 3s", flush=True)
+            pub_cmd_vel = None
+            time.sleep(3.0)
+
+        finally:
+            pub_cmd_vel = None
+            try:
+                del subs
+            except Exception:
+                pass
+            if session:
+                try:
+                    session.close()
+                except Exception:
+                    pass
 
 
 def gen_frames():
@@ -191,7 +211,10 @@ def odom():
 def cmd():
     data = request.get_json(silent=True)
     if pub_cmd_vel is not None and data:
-        pub_cmd_vel.put(json.dumps(data))
+        try:
+            pub_cmd_vel.put(json.dumps(data))
+        except Exception as e:
+            print(f"[cmd] publish error: {e}", flush=True)
     return jsonify({'ok': True})
 
 
