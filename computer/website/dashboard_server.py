@@ -16,20 +16,23 @@ from utils import load_config, get_zenoh_config, register_signals
 
 app = Flask(__name__)
 
+# raw_queue: decoded numpy BGR frames waiting for YOLO (maxsize=1, always latest)
+# frame_queue: JPEG bytes ready for the MJPEG stream
+raw_queue   = Queue(maxsize=1)
 frame_queue = Queue(maxsize=1)
 node_stats  = {}
 odom_data   = {}
-pub_cmd_vel = None          # set once zenoh_worker initialises
+pub_cmd_vel = None
 config      = load_config()
 stop_event  = threading.Event()
 
 codec = av.CodecContext.create('h264', 'r')
 
-# YOLOv8n — downloads yolov8n.pt on first run (~6 MB).
-# Uses CUDA automatically if available, otherwise CPU.
+# YOLOv8n — downloads yolov8n.pt on first run (~6 MB). CUDA auto-detected.
 yolo = YOLO('yolov8n.pt')
+print(f"[YOLO] running on: {yolo.device}", flush=True)
 
-# Colour palette: one BGR colour per class id (cycles every 80)
+# Colour palette: one BGR colour per class id
 _PALETTE = [
     (56, 56, 255), (151, 157, 255), (31, 112, 255), (29, 178, 255),
     (49, 210, 207), (10, 249, 72),  (23, 204, 146), (134, 219, 61),
@@ -43,16 +46,14 @@ def _class_color(cls_id):
 
 
 def _draw_detections(img, results):
-    """Draw bounding boxes and labels from a YOLO Results object."""
     for box in results.boxes:
         x1, y1, x2, y2 = map(int, box.xyxy[0].tolist())
-        conf     = float(box.conf[0])
-        cls_id   = int(box.cls[0])
-        label    = f"{results.names[cls_id]} {conf:.2f}"
-        color    = _class_color(cls_id)
+        conf   = float(box.conf[0])
+        cls_id = int(box.cls[0])
+        label  = f"{results.names[cls_id]} {conf:.2f}"
+        color  = _class_color(cls_id)
 
         cv2.rectangle(img, (x1, y1), (x2, y2), color, 2)
-
         (tw, th), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.45, 1)
         cv2.rectangle(img, (x1, y1 - th - 6), (x1 + tw + 4, y1), color, -1)
         cv2.putText(img, label, (x1 + 2, y1 - 3),
@@ -60,7 +61,6 @@ def _draw_detections(img, results):
 
 
 def _draw_osd(img):
-    """Burn node-stats overlay onto img in-place (same style as OSD window)."""
     row_h   = 35
     padding = 10
     box_h   = 30 + len(node_stats) * row_h + padding
@@ -71,9 +71,9 @@ def _draw_osd(img):
                 cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
     y = 40
     for node, stats in node_stats.items():
-        temp    = stats.get('temp', '--')
-        cpu     = stats.get('cpu_percent', '--')
-        last_c  = stats.get('last_counter', '0')
+        temp     = stats.get('temp', '--')
+        cpu      = stats.get('cpu_percent', '--')
+        last_c   = stats.get('last_counter', '0')
         temp_str = f"| {temp}C" if temp not in (0.0, '--') else ""
         cv2.putText(img, f"{node}: {cpu}% CPU {temp_str}", (10, y),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.4, (0, 255, 0), 1)
@@ -82,28 +82,46 @@ def _draw_osd(img):
         y += 35
 
 
+# ── Zenoh video callback: decode H.264 → drop into raw_queue (never blocks) ──
 def video_handler(sample):
     try:
         packets = codec.parse(bytes(sample.payload))
         for packet in packets:
-            frames = codec.decode(packet)
-            for frame in frames:
+            for frame in codec.decode(packet):
                 img = frame.to_ndarray(format='bgr24')
-                results = yolo(img, verbose=False)[0]
-                _draw_detections(img, results)
-                _draw_osd(img)
-                ok, jpg = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 80])
-                if not ok:
-                    continue
-                data = jpg.tobytes()
-                if frame_queue.full():
+                if raw_queue.full():
                     try:
-                        frame_queue.get_nowait()
+                        raw_queue.get_nowait()
                     except Empty:
                         pass
-                frame_queue.put_nowait(data)
+                raw_queue.put_nowait(img)
     except Exception as e:
         print(f"[video_handler] ERROR: {e}", flush=True)
+
+
+# ── Inference thread: YOLO → draw → JPEG → frame_queue ───────────────────────
+def inference_worker():
+    while not stop_event.is_set():
+        try:
+            img = raw_queue.get(timeout=1.0)
+        except Empty:
+            continue
+        try:
+            results = yolo(img, verbose=False)[0]
+            _draw_detections(img, results)
+            _draw_osd(img)
+            ok, jpg = cv2.imencode('.jpg', img, [cv2.IMWRITE_JPEG_QUALITY, 80])
+            if not ok:
+                continue
+            data = jpg.tobytes()
+            if frame_queue.full():
+                try:
+                    frame_queue.get_nowait()
+                except Empty:
+                    pass
+            frame_queue.put_nowait(data)
+        except Exception as e:
+            print(f"[inference_worker] ERROR: {e}", flush=True)
 
 
 def heartbeat_handler(sample):
@@ -131,9 +149,9 @@ def zenoh_worker():
     pub_cmd_vel = session.declare_publisher(config['topics']['cmd_vel'])
 
     subs = [
-        session.declare_subscriber(config['topics']['video'],               video_handler),
-        session.declare_subscriber(f"{config['topics']['heartbeat']}/*",    heartbeat_handler),
-        session.declare_subscriber(config['topics']['odom'],                odom_handler),
+        session.declare_subscriber(config['topics']['video'],            video_handler),
+        session.declare_subscriber(f"{config['topics']['heartbeat']}/*", heartbeat_handler),
+        session.declare_subscriber(config['topics']['odom'],             odom_handler),
         session.declare_subscriber(config['topics']['shutdown'], lambda _s: stop_event.set()),
     ]
 
@@ -176,10 +194,6 @@ def odom():
 
 @app.route('/cmd', methods=['POST'])
 def cmd():
-    """
-    Receive a drive command from the browser and publish it to felix/cmd_vel.
-    Body: {"cmd": "w", "speed": 150}
-    """
     data = request.get_json(silent=True)
     if pub_cmd_vel is not None and data:
         pub_cmd_vel.put(json.dumps(data))
@@ -188,7 +202,8 @@ def cmd():
 
 def main():
     register_signals(stop_event)
-    threading.Thread(target=zenoh_worker, daemon=True).start()
+    threading.Thread(target=zenoh_worker,    daemon=True).start()
+    threading.Thread(target=inference_worker, daemon=True).start()
 
     def open_browser():
         time.sleep(2)
