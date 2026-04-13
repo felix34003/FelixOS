@@ -78,6 +78,7 @@ def _draw_osd(img):
 
 
 def video_handler(sample):
+    global codec
     try:
         packets = codec.parse(bytes(sample.payload))
         for packet in packets:
@@ -90,7 +91,8 @@ def video_handler(sample):
                         pass
                 raw_queue.put_nowait(img)
     except Exception as e:
-        print(f"[video_handler] ERROR: {e}", flush=True)
+        print(f"[video_handler] ERROR: {e} — resetting decoder", flush=True)
+        codec = av.CodecContext.create('h264', 'r')
 
 
 def inference_worker():

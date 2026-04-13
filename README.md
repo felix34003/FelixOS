@@ -180,7 +180,7 @@ The Arduino has a **1000 ms safety watchdog** — if no command is received for 
 
 **PC:**
 ```bash
-pip install eclipse-zenoh flask opencv-python av psutil fabric
+pip install eclipse-zenoh flask opencv-python av psutil fabric ultralytics
 ```
 
 **Pi (installed automatically via `start_all.py` sync, but needed once):**
